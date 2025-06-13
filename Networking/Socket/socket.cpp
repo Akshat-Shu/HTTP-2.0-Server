@@ -1,6 +1,7 @@
 #include "socket.h"
 #include "../Utils/Logger/logger.h"
 #include <unistd.h>
+#include "fcntl.h"
 
 int Socket::ctr = 0;
 std::vector<Socket*> Socket::sockets;
@@ -34,6 +35,19 @@ Socket::Socket(int port) : port(port), id(ctr++), sockFD(-1) {
 
     if (listen(sockFD, MAX_QUEUE) < 0) {
         Logger::error("Failed to listen on socket");
+        close(sockFD);
+        return;
+    }
+
+    int flags = fcntl(sockFD, F_GETFL, 0);
+    if (flags == -1) {
+        Logger::error("Failed to get socket flags");
+        close(sockFD);
+        return;
+    }
+
+    if (fcntl(sockFD, F_SETFL, flags | O_NONBLOCK) == -1) {
+        Logger::error("Failed to set socket to non-blocking mode");
         close(sockFD);
         return;
     }

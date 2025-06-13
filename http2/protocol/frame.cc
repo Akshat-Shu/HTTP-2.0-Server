@@ -69,6 +69,7 @@ std::vector<Frame> toFrames(const uint8_t* begin, const uint8_t* end) {
     begin += 9 + frame.payload().size();
   }
   return frames;
+}
 
 }  // namespace protocol
 }  // namespace http2
