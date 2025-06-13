@@ -58,7 +58,7 @@ class Frame final {
   void set_stream_id(uint32_t sid) { sid_ = sid; }
   std::vector<uint8_t>& mutable_payload() { return payload_; }
 
-  std::vector<uint8_t> encode() const;
+  std::vector<uint8_t> encode(bool debug = false) const;
 
   bool decode(const uint8_t* begin, const uint8_t* end);
   bool decode(const std::vector<uint8_t>& vec) {

@@ -7,12 +7,14 @@
 #include <algorithm>
 #include "socket.h"
 #include <sys/epoll.h>
+#include "Multithreading/threadPool.h"
 
 class ClientManager {
 public:
     static std::map<int, Client*> clients;
     static int ctr;
 
+    static ThreadPool threadPool;
 
     static Client* getClient(int id) {
         auto functor = Client::findById(id);

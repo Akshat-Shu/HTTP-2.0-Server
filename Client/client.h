@@ -5,6 +5,7 @@
 #include <vector>
 #include <sys/epoll.h>
 #include "http2/protocol/frame.h"
+#include "stream.h"
 
 #define TIMEOUT 600
 #define BUFFER_SIZE 4096
@@ -18,6 +19,8 @@ public:
     std::string ip;
     int errorCode;
     Fd clientFD;
+    std::map<int, Stream*> streams;
+    int lastProcessedStream;
 
     // static std::map<int, Client*> clients;
     // static int ctr;
@@ -44,4 +47,8 @@ public:
     bool isTimedOut(const int timeout=TIMEOUT) const;
 
     void doRequest(epoll_event& event);
+
+    bool sendFrame(const http2::protocol::Frame& frame);
+
+    bool sendPreface(); 
 };

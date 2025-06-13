@@ -1,6 +1,11 @@
 #include "clientManager.h"
 #include "Utils/Logger/logger.h"
 
+int ClientManager::ctr = 0;
+std::map<int, Client*> ClientManager::clients;
+ThreadPool ClientManager::threadPool = ThreadPool(4);
+
+
 Client* ClientManager::acceptClient(int socket) {
     struct sockaddr addr;
     socklen_t addrLen = sizeof(addr);
@@ -18,6 +23,12 @@ Client* ClientManager::acceptClient(int socket) {
     Logger::info("Accepted new client with ID: " + std::to_string(client->id) + 
                  " from IP: " + client->ip + 
                  " on socket with FD: " + std::to_string(socket));
+
+    if (!client->sendPreface()) {
+        Logger::error("Failed to send preface to client ID: " + std::to_string(client->id));
+        removeClient(client->id);
+        return nullptr;
+    }
 
     return client;
 }

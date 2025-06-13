@@ -24,7 +24,7 @@ Frame::operator std::string() const { // for printing
   return out.str();
 }
 
-std::vector<uint8_t> Frame::encode() const { // getFrame (encode it)
+std::vector<uint8_t> Frame::encode(bool debug) const { // getFrame (encode it)
   std::cerr << "DEBUG: " << *this << std::endl;
   uint32_t s = payload_.size();
   if (s > 0x00ffffffUL) abort();
@@ -62,11 +62,12 @@ bool Frame::decode(const uint8_t* p, const uint8_t* q) {
 
 std::vector<Frame> toFrames(const uint8_t* begin, const uint8_t* end) {
   std::vector<Frame> frames;
-  while (begin < end) {
+  uint8_t* curr = (const_cast<uint8_t*>(begin));
+  while (curr < end) {
     Frame frame;
-    if (!frame.decode(begin, end)) break;
+    if (!frame.decode(curr, end)) break;
     frames.push_back(std::move(frame));
-    begin += 9 + frame.payload().size();
+    curr += 9 + frame.payload().size();
   }
   return frames;
 }
