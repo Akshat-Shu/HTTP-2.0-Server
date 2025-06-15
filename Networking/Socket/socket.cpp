@@ -1,5 +1,5 @@
 #include "socket.h"
-#include "../Utils/Logger/logger.h"
+#include "Utils/Logger/logger.h"
 #include <unistd.h>
 #include "fcntl.h"
 
@@ -20,7 +20,8 @@ Socket::Socket(int port) : port(port), id(ctr++), sockFD(-1) {
         return;
     }
 
-    if(setsockopt(sockFD, SOL_SOCKET, SO_REUSEADDR | SO_REUSEPORT, &(int){1}, sizeof(int)) < 0) {
+    int opt = 1;
+    if(setsockopt(sockFD, SOL_SOCKET, SO_REUSEADDR | SO_REUSEPORT, &opt, sizeof(opt)) < 0) {
         // so that we can run on the same port without waiting
         Logger::error("Failed to set socket options");
         close(sockFD);
@@ -46,11 +47,6 @@ Socket::Socket(int port) : port(port), id(ctr++), sockFD(-1) {
         return;
     }
 
-    if (fcntl(sockFD, F_SETFL, flags | O_NONBLOCK) == -1) {
-        Logger::error("Failed to set socket to non-blocking mode");
-        close(sockFD);
-        return;
-    }
 
     Logger::info("Socket created and listening on port " + std::to_string(port));
     sockets.push_back(this);

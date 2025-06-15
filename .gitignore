@@ -1,1 +1,6 @@
 Messages/
+Client/note.cpp
+Note
+**/BUILD
+bin/
+build/
