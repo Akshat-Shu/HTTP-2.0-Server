@@ -1,0 +1,94 @@
+<!--Generated using ChatGPT-->
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive Gradient</title>
+    <style>
+        body {
+            margin: 0;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-family: 'Arial', sans-serif;
+            color: white;
+            transition: background-color 0.5s ease;
+            background: linear-gradient(45deg, #12c2e9, #c471ed, #f64f59);
+            background-size: 400% 400%;
+            overflow: hidden;
+        }
+        
+        .content {
+            text-align: center;
+            z-index: 1;
+        }
+        
+        h1 {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+            text-shadow: 2px 2px 8px rgba(0, 0, 0, 0.3);
+        }
+        
+        p {
+            font-size: 1.2rem;
+            max-width: 600px;
+            margin: 0 auto 2rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="content">
+        <h1>Move Your Mouse</h1>
+        <p>Watch the background respond to your movement</p>
+    </div>
+
+    <script>
+        document.addEventListener('mousemove', (e) => {
+            const x = e.clientX / window.innerWidth;
+            const y = e.clientY / window.innerHeight;
+            
+            // Update background position based on mouse
+            document.body.style.backgroundPosition = `${x * 100}% ${y * 100}%`;
+            
+            // Create ripple effect on click
+            document.addEventListener('click', (event) => {
+                const ripple = document.createElement('div');
+                ripple.style.position = 'absolute';
+                ripple.style.borderRadius = '50%';
+                ripple.style.transform = 'translate(-50%, -50%)';
+                ripple.style.width = '10px';
+                ripple.style.height = '10px';
+                ripple.style.background = 'rgba(255, 255, 255, 0.8)';
+                ripple.style.left = `${event.clientX}px`;
+                ripple.style.top = `${event.clientY}px`;
+                ripple.style.pointerEvents = 'none';
+                
+                document.body.appendChild(ripple);
+                
+                let size = 0;
+                let opacity = 1;
+                
+                const animate = () => {
+                    size += 15;
+                    opacity -= 0.03;
+                    
+                    ripple.style.width = `${size}px`;
+                    ripple.style.height = `${size}px`;
+                    ripple.style.opacity = opacity;
+                    
+                    if (opacity > 0) {
+                        requestAnimationFrame(animate);
+                    } else {
+                        ripple.remove();
+                    }
+                };
+                
+                requestAnimationFrame(animate);
+            });
+        });
+    </script>
+</body>
+</html>

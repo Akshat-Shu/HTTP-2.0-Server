@@ -69,11 +69,20 @@ class Frame final {
 
   static std::vector<Frame> toFrames(const uint8_t* begin, const uint8_t* end); 
 
+  bool isPriority() const { return hasPriority_; }
+  uint32_t streamDependency() const { return streamDependency_; }
+  bool isExclusive() const { return exclusive_; }
+  uint8_t weight() const { return weight_; }
+
  private:
   uint8_t type_;
   uint8_t flags_;
   uint32_t sid_;
   std::vector<uint8_t> payload_;
+  bool hasPriority_ = false;
+  uint32_t streamDependency_ = -1;
+  bool exclusive_ = false;
+  uint8_t weight_ = 0;
 };
 
 inline std::ostream& operator<<(std::ostream& s, const Frame& t) {

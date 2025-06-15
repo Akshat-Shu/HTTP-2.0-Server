@@ -8,9 +8,12 @@
 #include "http2/protocol/frame.h"
 #include "http2/protocol/settings.h"
 #include "http2/protocol/error.h"
-#include "http2/protocol/hpack/hpack.h"
+#include "http2/headers/headers.h"
 #include "Multithreading/threadPool.h"
 #include "stream.h"
+#include <openssl/ssl.h>
+#include "Utils/toHex.cpp"
+#include "WebBinder/webBinder.h"
 
 #pragma once
 
@@ -30,6 +33,8 @@ public:
     int lastProcessedStream;
     ThreadPool* threadPool;
     std::vector<uint8_t> recvBuffer;
+    SSL* ssl;
+    WebBinder* binder;
 
     // static std::map<int, Client*> clients;
     // static int ctr;
@@ -51,10 +56,10 @@ public:
 
     static std::string getIp(const sockaddr_in6& addr); 
 
-    Client(int id, int fd, const sockaddr_in6& addr, socklen_t addrLen);
+    Client(int id, int fd, const sockaddr_in6& addr, socklen_t addrLen, SSL* ssl, WebBinder* binder);
 
-    Client(int id, int fd, const sockaddr_in6& addr, socklen_t addrLen, ThreadPool* thPool)
-        : Client(id, fd, addr, addrLen) {
+    Client(int id, int fd, const sockaddr_in6& addr, socklen_t addrLen, ThreadPool* thPool, SSL* ssl, WebBinder* binder)
+        : Client(id, fd, addr, addrLen, ssl, binder) {
         threadPool = thPool;
     }
 
@@ -64,11 +69,9 @@ public:
 
     bool sendFrame(const http2::protocol::Frame& frame);
 
-    bool sendPreface();
+    bool acceptPreface();
 
     bool applySettings();
-
-    bool sendUpgradeHeader();
 
     bool handleDataFrame(const http2::protocol::Frame& frame);
     bool handleHeadersFrame(const http2::protocol::Frame& frame);

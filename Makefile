@@ -1,6 +1,6 @@
 CXX = g++
 CXXFLAGS = -std=c++17 -Wall -Werror -I.
-LDFLAGS = -pthread
+LDFLAGS = -pthread -lssl -lcrypto
 
 ifdef DEBUG
     CXXFLAGS += -g -O0 -DDEBUG
@@ -10,7 +10,7 @@ endif
 
 SRC_DIRS = Client http2/headers http2/protocol http2/protocol/hpack \
            Multithreading Networking/Epoller Networking/Socket \
-           Utils/Logger
+           Utils WebBinder
 
 EXCLUDE_DIRS = Messages Note
 
@@ -25,7 +25,7 @@ DEPS = $(OBJS:.o=.d)
 
 SERVER_TARGET = $(BIN_DIR)/server
 
-all: $(SERVER_TARGET) $(CLIENT_TARGET)
+all: $(SERVER_TARGET)
 
 $(SERVER_TARGET): $(OBJS) | $(BIN_DIR)
 	$(CXX) $^ -o $@ $(LDFLAGS)

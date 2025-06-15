@@ -25,7 +25,7 @@ public:
     std::vector<uint8_t> headerFragments;
     std::string method;
     std::string path;
-    std::vector<http2::headers::Header> headers;
+    http2::headers::Headers headers;
     
     bool exclusive = false;
     int dependency = UNSET;

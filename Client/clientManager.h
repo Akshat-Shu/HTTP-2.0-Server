@@ -8,6 +8,8 @@
 #include "Networking/Socket/socket.h"
 #include <sys/epoll.h>
 #include "Multithreading/threadPool.h"
+#include <openssl/ssl.h>
+#include "unistd.h"
 
 class ClientManager {
 public:
@@ -29,7 +31,7 @@ public:
         return nullptr;
     }
 
-    static Client* acceptClient(int socket);
+    static Client* acceptClient(int socket, SSL_CTX* ctx, WebBinder* binder);
 
     static void removeClient(Fd fd) {
         auto it = clients.find(fd.fd);

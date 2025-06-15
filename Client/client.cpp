@@ -7,9 +7,10 @@ std::string Client::getIp(const sockaddr_in6& addr) {
     return std::string(ipStr);
 }
 
-Client::Client(int id, int fd, const sockaddr_in6& addr, socklen_t addrLen)
+Client::Client(int id, int fd, const sockaddr_in6& addr, socklen_t addrLen, SSL* ssl, WebBinder* binder)
     : id(id), addr(addr), addrLen(addrLen), start(time(nullptr)),
-    errorCode(0), clientFD(fd, EpollFdType::CLIENT), lastProcessedStream(-1) {
+    errorCode(0), clientFD(fd, EpollFdType::CLIENT), lastProcessedStream(-1),
+    recvBuffer(BUFFER_SIZE), ssl(ssl), binder(binder) {
     ip = getIp(addr);
 }
 
@@ -22,7 +23,7 @@ bool Client::sendFrame(const http2::protocol::Frame& frame) {
     int fd = clientFD.fd;
 
     auto bytesSent = threadPool->enqueue([this, encodedFrame, fd]() {
-        ssize_t bytesSent = send(fd, encodedFrame.data(), encodedFrame.size(), MSG_DONTWAIT | MSG_NOSIGNAL);
+        ssize_t bytesSent = SSL_write(ssl, encodedFrame.data(), encodedFrame.size());
         if (bytesSent < 0) {
             Logger::error("Error sending frame to client: " + std::to_string(errno));
             return -1;
@@ -36,45 +37,6 @@ bool Client::sendFrame(const http2::protocol::Frame& frame) {
     });
 
     return bytesSent.get() >= 0;
-}
-
-bool Client::sendPreface() {
-    std::string preface = "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n";
-    ssize_t bytesSent = send(clientFD.fd, preface.c_str(), preface.size(), MSG_DONTWAIT | MSG_NOSIGNAL);
-    
-    if (bytesSent < 0) {
-        errorCode = errno;
-        Logger::error("Error sending preface to client: " + std::to_string(errorCode));
-        return false;
-    } else if (bytesSent < static_cast<ssize_t>(preface.size())) {
-        Logger::warning("Partial preface sent to client, expected: " + std::to_string(preface.size()) +
-                        ", sent: " + std::to_string(bytesSent));
-    } else {
-        Logger::debug("Sent preface to client ID: " + std::to_string(id));
-    }
-    
-    return bytesSent == static_cast<ssize_t>(preface.size());
-}
-
-bool Client::sendUpgradeHeader() {
-    std::string upgradeHeader = "HTTP/1.1 101 Switching Protocols\r\n"
-                                "Upgrade: h2c\r\n"
-                                "Connection: Upgrade\r\n"
-                                "\r\n";
-    ssize_t bytesSent = send(clientFD.fd, upgradeHeader.c_str(), upgradeHeader.size(), MSG_DONTWAIT | MSG_NOSIGNAL);
-    
-    if (bytesSent < 0) {
-        errorCode = errno;
-        Logger::error("Error sending upgrade header to client: " + std::to_string(errorCode));
-        return false;
-    } else if (bytesSent < static_cast<ssize_t>(upgradeHeader.size())) {
-        Logger::warning("Partial upgrade header sent to client, expected: " + std::to_string(upgradeHeader.size()) +
-                        ", sent: " + std::to_string(bytesSent));
-    } else {
-        Logger::debug("Sent upgrade header to client ID: " + std::to_string(id));
-    }
-    
-    return bytesSent == static_cast<ssize_t>(upgradeHeader.size());
 }
 
 bool Client::applySettings() {
@@ -109,7 +71,8 @@ bool Client::applySettings() {
 
 void Client::doRequest(epoll_event& event) {
     recvBuffer.resize(BUFFER_SIZE);
-    ssize_t bytesRead = recv(clientFD.fd, recvBuffer.data(), recvBuffer.size(), MSG_DONTWAIT | MSG_NOSIGNAL);
+    // ssize_t bytesRead = recv(clientFD.fd, recvBuffer.data(), recvBuffer.size(), MSG_DONTWAIT | MSG_NOSIGNAL);
+    ssize_t bytesRead = SSL_read(ssl, recvBuffer.data(), recvBuffer.size());
 
     // Logger::debug("Client ID: " + std::to_string(id) + " received data, bytes read: " + std::to_string(bytesRead));
 
@@ -130,12 +93,14 @@ void Client::doRequest(epoll_event& event) {
     }
 
     Logger::debug("Client ID: " + std::to_string(id) + " received data, bytes read: " + std::to_string(bytesRead));
-    Logger::debug("Data: ");
-    std::string bytes = "";
-    for (ssize_t i = 0; i < bytesRead; ++i) {
-        bytes += std::to_string(recvBuffer[i]) + " ";
+    Logger::debug("Data: " + toHex(recvBuffer.data(), bytesRead));
+
+    std::string prefaceStr = "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n";
+    if (recvBuffer.size() >= prefaceStr.size() && 
+        std::equal(prefaceStr.begin(), prefaceStr.end(), recvBuffer.begin())) {
+        Logger::info("HTTP/2 preface received from client ID: " + std::to_string(id));
+        recvBuffer.erase(recvBuffer.begin(), recvBuffer.begin() + prefaceStr.size());
     }
-    Logger::debug(bytes);
 
     std::vector<http2::protocol::Frame> frames = http2::protocol::Frame::toFrames(
         recvBuffer.data(),
@@ -144,6 +109,9 @@ void Client::doRequest(epoll_event& event) {
     Logger::info("Received " + std::to_string(frames.size()) + " frames from client ID: " + std::to_string(id));
 
     for(const auto& frame: frames) {
+        if(frame.isPriority()) {
+            Logger::debug("Priority frame received for stream ID: " + std::to_string(frame.stream_id()));
+        }
         if(handleFrame(frame)) {
             Logger::info("Handled frame of type: " + std::to_string(frame.type()) + 
                          " for client ID: " + std::to_string(id));
@@ -209,14 +177,27 @@ bool Client::handleHeadersFrame(const http2::protocol::Frame& frame) {
 bool Client::processEndHeader(Stream* strm) {
     try {
         http2::protocol::hpack::Decoder decoder;
-        decoder.decode(strm->headerFragments, strm->headers);
+        decoder.decode_lowmem(strm->headerFragments.data(), 
+                       strm->headerFragments.data() + strm->headerFragments.size(),
+                       [&strm](http2::headers::Header header) {
+                           strm->headers.add(std::move(header));
+                       });
         strm->state = StreamState::HALF_CLOSED_REMOTE;
         strm->endHeader = true;
         strm->headerFragments.clear();
 
-        for (const auto& header : strm->headers) {
+        for (const auto& header : strm->headers.all()) {
             Logger::debug("Header received: " + header.name + ": " + header.value);
         }
+
+        auto [found, method] = strm->headers.first(":method");
+        if(!found) {
+            Logger::error("No :method header found in headers for stream ID: " + std::to_string(strm->id));
+            return false;
+        }
+
+        
+
         return true;
     } catch (const std::exception& e) {
         Logger::error("Error processing end header: " + std::string(e.what()));
@@ -230,5 +211,20 @@ bool Client::handleWindowUpdateFrame(const http2::protocol::Frame &frame) {retur
 bool Client::handleContinuationFrame(const http2::protocol::Frame & frame) {return true;}
 bool Client::handlePriorityFrame(const http2::protocol::Frame &frame) {return true;}
 bool Client::handleResetFrame(const http2::protocol::Frame & frame) {return true;}
-bool Client::handleSettingsFrame(const http2::protocol::Frame &frame) {return true;}
 bool Client::handlePushPromiseFrame(const http2::protocol::Frame &frame) {return true;}
+
+bool Client::handleSettingsFrame(const http2::protocol::Frame &frame) {
+    if (frame.stream_id() != 0) {
+        Logger::error("Settings frame received with non-zero stream ID: " + std::to_string(frame.stream_id()));
+        return false;
+    }
+
+    if (!frame.has_flag(http2::protocol::ACK)) {
+        Logger::info("Received settings frame, applying settings");
+        return applySettings();
+    } else {
+        Logger::info("Received settings ACK from client ID: " + std::to_string(id));
+    }
+
+    return true;
+}

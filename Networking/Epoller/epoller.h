@@ -16,6 +16,7 @@ class Epoller {
 public:
     int epollFD;
     std::vector<struct epoll_event> events;
+    WebBinder* binder;
 
     bool addFD(int fd);
     bool addFD(int fd, Client* client);
@@ -30,6 +31,10 @@ public:
         if (epollFD != -1) {
             close(epollFD);
         }
+    }
+
+    void setBinder(WebBinder& webBinder) {
+        binder = &webBinder;
     }
 
     void epollLoop();

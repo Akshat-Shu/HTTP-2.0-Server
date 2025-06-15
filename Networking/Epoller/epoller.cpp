@@ -125,7 +125,7 @@ void Epoller::epollLoop() {
             if (it1 != Socket::sockets.end()) {
                 Socket* socket = *it1;
                 Logger::info("Handling socket event for socket ID: " + std::to_string(socket->id));
-                Client* newClient = ClientManager::acceptClient(socket->sockFD);
+                Client* newClient = ClientManager::acceptClient(socket->sockFD, socket->ctx, binder);
                 addFD(newClient->clientFD.fd);
             } else {
                 Logger::warning("Unknown Socket with FD " + std::to_string(fd));
