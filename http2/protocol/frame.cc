@@ -60,7 +60,7 @@ bool Frame::decode(const uint8_t* p, const uint8_t* q) {
   return true;
 }
 
-std::vector<Frame> toFrames(const uint8_t* begin, const uint8_t* end) {
+std::vector<Frame> Frame::toFrames(const uint8_t* begin, const uint8_t* end) {
   std::vector<Frame> frames;
   uint8_t* curr = (const_cast<uint8_t*>(begin));
   while (curr < end) {

@@ -53,10 +53,23 @@ void Encoder::encode(const Header& h, std::vector<uint8_t>& output) {
     } else {
       output.push_back(0x40);
     }
-    encode_integer(0x00, 7, h.name.size(), output);
-    output.insert(output.end(), h.name.begin(), h.name.end());
-    encode_integer(0x00, 7, h.value.size(), output);
-    output.insert(output.end(), h.value.begin(), h.value.end());
+    
+    std::vector<uint8_t> huffman_name;
+    encode_huffman(reinterpret_cast<const uint8_t*>(h.name.data()),
+                  reinterpret_cast<const uint8_t*>(h.name.data() + h.name.size()),
+                  huffman_name);
+    
+    encode_integer(0x80, 7, huffman_name.size(), output);
+    output.insert(output.end(), huffman_name.begin(), huffman_name.end());
+    
+    std::vector<uint8_t> huffman_value;
+    encode_huffman(reinterpret_cast<const uint8_t*>(h.value.data()),
+                  reinterpret_cast<const uint8_t*>(h.value.data() + h.value.size()),
+                  huffman_value);
+    
+    encode_integer(0x80, 7, huffman_value.size(), output);
+    output.insert(output.end(), huffman_value.begin(), huffman_value.end());
+    
     return;
   }
 
@@ -73,8 +86,15 @@ void Encoder::encode(const Header& h, std::vector<uint8_t>& output) {
   } else {
     encode_integer(0x40, 6, index, output);
   }
-  encode_integer(0x00, 7, h.value.size(), output);
-  output.insert(output.end(), h.value.begin(), h.value.end());
+
+  std::vector<uint8_t> huffman_value;
+  encode_huffman(reinterpret_cast<const uint8_t*>(h.value.data()),
+                reinterpret_cast<const uint8_t*>(h.value.data() + h.value.size()),
+                huffman_value);
+  
+  encode_integer(0x80, 7, huffman_value.size(), output);
+  output.insert(output.end(), huffman_value.begin(), huffman_value.end());
+
 }
 
 }  // namespace hpack
