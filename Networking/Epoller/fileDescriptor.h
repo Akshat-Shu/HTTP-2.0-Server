@@ -2,11 +2,10 @@
 
 enum FdState {
     NEW,
-    NONE,
     READY_READ,
     READY_WRITE,
     READ_READ_WRITE,
-    CLOSED
+    FD_CLOSED
 };
 
 enum EpollFdType {

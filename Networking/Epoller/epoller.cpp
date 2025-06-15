@@ -95,6 +95,10 @@ void Epoller::epollLoop() {
         return;
     }
 
+    // if(nfd > 0) {
+    //     Logger::debug("Epoll wait returned " + std::to_string(nfd) + " events");
+    // }
+
     for(int i = 0; i < nfd; ++i) {
         int fd = events[i].data.fd;
         EpollFdType type = getType(fd);
@@ -104,7 +108,14 @@ void Epoller::epollLoop() {
             if (it != ClientManager::clients.end()) {
                 Client* client = it->second;
                 ClientManager::handleClient(client, events[i]);
-                Logger::info("Handling client event for client ID: " + std::to_string(client->id));
+                // Logger::info("Handling client event for client ID: " + std::to_string(client->id));
+                
+                if(client->clientFD.state == FD_CLOSED) {
+                    Logger::info("Client with ID " + std::to_string(client->id) + " is closed, removing from epoll");
+                    removeFD(client->clientFD.fd, client);
+                    ClientManager::removeClient(client->id);
+                }
+                
             } else {
                 Logger::warning("Unknown Client with FD " + std::to_string(fd));
             }
@@ -113,8 +124,9 @@ void Epoller::epollLoop() {
                                     [fd](Socket* socket) { return socket->sockFD == fd; });
             if (it1 != Socket::sockets.end()) {
                 Socket* socket = *it1;
-                ClientManager::acceptClient(socket->sockFD);
                 Logger::info("Handling socket event for socket ID: " + std::to_string(socket->id));
+                Client* newClient = ClientManager::acceptClient(socket->sockFD);
+                addFD(newClient->clientFD.fd);
             } else {
                 Logger::warning("Unknown Socket with FD " + std::to_string(fd));
             }

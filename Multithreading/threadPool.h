@@ -8,14 +8,15 @@
 #include <future>
 #include "Utils/Logger/logger.h"
 
+#pragma once
 
 class ThreadPool {
 public:
-    ThreadPool(size_t n = std::thread::hardware_concurrency()) : stop(false) {}
+    ThreadPool(size_t n = std::thread::hardware_concurrency());
 
 
     template<class F, class... Args> // function template has to be in header file
-    auto ThreadPool::enqueue(F&& f, Args&&... args)
+    auto enqueue(F&& f, Args&&... args)
         -> std::future<typename std::result_of<F(Args...)>::type> {
         using return_type = typename std::result_of<F(Args...)>::type;
         auto task = std::make_shared<std::packaged_task<return_type()>>(
