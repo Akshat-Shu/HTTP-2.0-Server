@@ -16,20 +16,15 @@ enum LogColor {
     WHITE = 37
 };
 
-std::map<std::string, LogColor> logColors = {
-    {"DEBUG", BLUE},
-    {"INFO", GREEN},
-    {"WARNING", YELLOW},
-    {"ERROR", RED},
-    {"FATAL", MAGENTA}
-};
-
-std::string getColorCode(LogColor color) {
-    return "\033[" + std::to_string(color) + "m";
-}
 
 class Logger {
     static void log(const std::string& level, const std::string& message, LogColor color= RESET); 
+    
+    const static std::map<std::string, LogColor> logColors; 
+
+    static std::string getColorCode(LogColor color) {
+        return "\033[" + std::to_string(color) + "m";
+    }
 
 public:
     static void debug(const std::string &message) {

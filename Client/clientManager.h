@@ -2,10 +2,10 @@
 
 #include <map>
 #include <netinet/in.h>
-#include "Client/client.h"
+#include "client.h"
 #include "Networking/Epoller/fileDescriptor.h"
 #include <algorithm>
-#include "socket.h"
+#include "Networking/Socket/socket.h"
 #include <sys/epoll.h>
 #include "Multithreading/threadPool.h"
 

@@ -1,3 +1,9 @@
+#include <vector>
+#include "http2/protocol/hpack/hpack.h"
+#include "http2/headers/headers.h"
+
+#pragma once
+
 enum StreamState {
     IDLE = 0,
     RESERVED_LOCAL = 1,
@@ -15,6 +21,17 @@ public:
     int id;
     char weight;
     StreamState state;
+    std::vector<uint8_t> data;
+    std::vector<uint8_t> headerFragments;
+    std::string method;
+    std::string path;
+    std::vector<http2::headers::Header> headers;
+    
+    bool exclusive = false;
+    int dependency = UNSET;
+
+    bool endHeader;
+    bool endStream;
 
     Stream(int id, char weight = 0, StreamState state = IDLE)
         : id(id), weight(weight), state(state) {}

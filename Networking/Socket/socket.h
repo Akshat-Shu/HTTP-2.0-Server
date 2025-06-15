@@ -4,6 +4,8 @@
 #define PORT 8080
 #define MAX_QUEUE 5
 
+#pragma once
+
 class Socket {
 public:
     int port;
@@ -17,6 +19,6 @@ public:
 
     Socket(int port);
 
-    Socket(): Socket(port) {}
+    Socket(): Socket(PORT) {}
 
 };

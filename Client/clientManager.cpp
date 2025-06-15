@@ -14,18 +14,30 @@ Client* ClientManager::acceptClient(int socket) {
 
     if(clientFD < 0) {
         Logger::error("Failed to accept client connection: " + std::to_string(errno));
-        return;
+        return nullptr;
     }
 
-    Client* client = new Client(++ctr, clientFD, *reinterpret_cast<sockaddr_in6*>(&addr), addrLen);
+    Client* client = new Client(++ctr, clientFD, *reinterpret_cast<sockaddr_in6*>(&addr), addrLen, &threadPool);
     clients[clientFD] = client;
 
     Logger::info("Accepted new client with ID: " + std::to_string(client->id) + 
                  " from IP: " + client->ip + 
                  " on socket with FD: " + std::to_string(socket));
 
+    if(!client->sendUpgradeHeader()) {
+        Logger::error("Failed to send upgrade header to client ID: " + std::to_string(client->id));
+        removeClient(client->id);
+        return nullptr;
+    }
+
     if (!client->sendPreface()) {
         Logger::error("Failed to send preface to client ID: " + std::to_string(client->id));
+        removeClient(client->id);
+        return nullptr;
+    }
+
+    if(!client->applySettings()) {
+        Logger::error("Failed to apply settings for client ID: " + std::to_string(client->id));
         removeClient(client->id);
         return nullptr;
     }
