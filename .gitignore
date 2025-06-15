@@ -4,3 +4,5 @@ Note
 **/BUILD
 bin/
 build/
+server.crt
+server.key

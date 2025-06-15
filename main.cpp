@@ -3,6 +3,7 @@
 #include "Networking/Socket/socket.h"
 #include "Utils/Logger/logger.h"
 #include "atomic"
+#include "WebBinder/webBinder.h"
 
 bool running = true;
 
@@ -11,6 +12,13 @@ int main() {
     // ClientManager clientManager;
 
     Socket socket(8080);
+
+    WebBinder webBinder;
+
+    webBinder.bindDirectory("/html/", "/html");
+    webBinder.bindFile("/html/reallyCoolSite.html", "/");
+
+    epoller.setBinder(webBinder);
 
     epoller.addFD(socket.sockFD);
 

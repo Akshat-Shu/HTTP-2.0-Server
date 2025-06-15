@@ -3,6 +3,7 @@
 #include <iostream>
 #include <iomanip>
 #include <sstream>
+#include <Utils/Logger/logger.h>
 
 namespace http2 {
 namespace protocol {
@@ -54,8 +55,36 @@ bool Frame::decode(const uint8_t* p, const uint8_t* q) {
   type_ = p[3];
   flags_ = p[4];
 
-  sid_ = (p[5] << 24) | (p[6] << 16) | (p[7] << 8) | p[8];
-  payload_.assign(p + 9, p + 9 + size);
+  sid_ = ((p[5] & 0x7F) << 24) | (p[6] << 16) | (p[7] << 8) | p[8];
+  p = p + 9;
+  size_t payload_size = size;
+  size_t headerStart = 0;
+
+  // I also need to handle flags like PADDED, PRIORITY which modify the frame here.
+  if((flags_ & PADDED) && (type_ == HEADERS_FRAME || type_ == PUSH_PROMISE_FRAME || type_ == DATA_FRAME)) {
+    uint8_t padLength = *p;
+    if(padLength > payload_size - 1) return false;
+    headerStart++;
+    payload_size -= (padLength + 1);
+    p++;
+  }
+
+  if((flags_ & PRIORITY) && (type_ == HEADERS_FRAME || type_ == PUSH_PROMISE_FRAME)) {
+    if(payload_size < 5 + headerStart) return false;
+     
+    hasPriority_ = true;
+    exclusive_ = (p[0] & 0x80) != 0;
+    streamDependency_ = ((p[0] & 0x7F) << 24) | (p[1] << 16) | (p[2] << 8) | p[3];
+    weight_ = p[4] + 1;
+    if (weight_ < 1 || weight_ > 256) return false;
+
+    headerStart += 5;
+    payload_size -= 5;
+    p += 5;
+  }
+
+  if (payload_size < headerStart) return false;
+  payload_.assign(p, p + payload_size);
 
   return true;
 }
@@ -64,10 +93,11 @@ std::vector<Frame> Frame::toFrames(const uint8_t* begin, const uint8_t* end) {
   std::vector<Frame> frames;
   uint8_t* curr = (const_cast<uint8_t*>(begin));
   while (curr < end) {
+    uint32_t size = (curr[0] << 16) | (curr[1] << 8) | curr[2];
     Frame frame;
     if (!frame.decode(curr, end)) break;
     frames.push_back(std::move(frame));
-    curr += 9 + frame.payload().size();
+    curr += 9 + size;
   }
   return frames;
 }
