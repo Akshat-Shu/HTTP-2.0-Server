@@ -126,6 +126,10 @@ void Epoller::epollLoop() {
                 Socket* socket = *it1;
                 Logger::info("Handling socket event for socket ID: " + std::to_string(socket->id));
                 Client* newClient = ClientManager::acceptClient(socket->sockFD, socket->ctx, binder);
+                if(newClient == nullptr) {
+                    Logger::error("Failed to accept new client from socket with FD: " + std::to_string(socket->sockFD));
+                    continue;
+                }
                 addFD(newClient->clientFD.fd);
             } else {
                 Logger::warning("Unknown Socket with FD " + std::to_string(fd));
