@@ -21,7 +21,7 @@ A light-weight Web Server built using HTTP 2.0 Protocol with TLS Suppport
 - Dynamic directory listing
 - Image/PDF/HTML/JS/CSS support
 
-[Server Trial.webm](https://github.com/user-attachments/assets/66459084-a2d8-4335-9efb-2d7694505b73)
+![Screencast from 2025-06-16 22-26-24 webm](https://github.com/user-attachments/assets/04a0b186-d621-407f-8cb9-6ee3d857ab07)
 
 ## Libraries
 - [libhttp2](https://github.com/chronos-tachyon/libhttp2) for frame encoding/decoding
