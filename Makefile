@@ -10,7 +10,7 @@ endif
 
 SRC_DIRS = Client http2/headers http2/protocol http2/protocol/hpack \
            Multithreading Networking/Epoller Networking/Socket \
-           Utils WebBinder
+           Utils WebBinder Response
 
 EXCLUDE_DIRS = Messages Note
 

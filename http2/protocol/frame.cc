@@ -26,7 +26,7 @@ Frame::operator std::string() const { // for printing
 }
 
 std::vector<uint8_t> Frame::encode(bool debug) const { // getFrame (encode it)
-  std::cerr << "DEBUG: " << *this << std::endl;
+  // std::cerr << "DEBUG: " << *this << std::endl;
   uint32_t s = payload_.size();
   if (s > 0x00ffffffUL) abort();
   std::vector<uint8_t> frame;

@@ -15,8 +15,8 @@ int main() {
 
     WebBinder webBinder;
 
-    webBinder.bindDirectory("/html/", "/html");
-    webBinder.bindFile("/html/reallyCoolSite.html", "/");
+    webBinder.bindDirectory("./html/", "/html");
+    webBinder.bindFile("./html/reallyCoolSite.html", "/");
 
     epoller.setBinder(webBinder);
 

@@ -14,6 +14,7 @@
 #include <openssl/ssl.h>
 #include "Utils/toHex.cpp"
 #include "WebBinder/webBinder.h"
+#include "Response/response.h"
 
 #pragma once
 
@@ -35,6 +36,7 @@ public:
     std::vector<uint8_t> recvBuffer;
     SSL* ssl;
     WebBinder* binder;
+    http2::protocol::Settings settings;
 
     // static std::map<int, Client*> clients;
     // static int ctr;
@@ -69,7 +71,11 @@ public:
 
     bool sendFrame(const http2::protocol::Frame& frame);
 
+    bool sendData(const std::vector<uint8_t>& data);
+
     bool acceptPreface();
+
+    bool ackSettings(const http2::protocol::Frame& frame);
 
     bool applySettings();
 
@@ -114,4 +120,5 @@ public:
     }
 
     bool processEndHeader(Stream* stream);
+    bool respondGet(Stream* stream);
 };

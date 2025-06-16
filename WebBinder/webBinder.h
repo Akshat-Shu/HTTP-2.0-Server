@@ -3,6 +3,7 @@
 #include <map>
 #include <fstream>
 #include "Utils/Logger/logger.h"
+#include "Response/responseData.h"
 
 #pragma once
 
@@ -10,6 +11,8 @@ class WebBinder {
 private:
     std::map<std::string, std::string> dirBindings;
     std::map<std::string, std::string> fileBindings;
+
+    static const ResponseData empty; 
 public:
     WebBinder() = default;
 
@@ -17,18 +20,11 @@ public:
 
     void bindFile(const std::string& file, const std::string& url);
 
-    std::string getContent(const std::string& url) {
-        if(dirBindings.find(url) != dirBindings.end()) {
-            return getDirectoryContent(dirBindings[url]);
-        } else if(fileBindings.find(url) != fileBindings.end()) {
-            return getFileContent(fileBindings[url]);
-        } else {
-            Logger::error("No binding found for URL: " + url);
-            return "";
-        }
-    };
+    ResponseData getContent(const std::string& url); 
     
-    std::string getFileContent(const std::string& file);
+    ResponseData getFileContent(const std::string& file);
 
-    std::string getDirectoryContent(const std::string& dir);
+    ResponseData getDirectoryContent(const std::string& dir, std::string boundUrl); 
+
+
 };
