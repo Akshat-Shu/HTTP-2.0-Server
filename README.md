@@ -27,7 +27,7 @@ A light-weight Web Server built using HTTP 2.0 Protocol with TLS Suppport
 - [libhttp2](https://github.com/chronos-tachyon/libhttp2) for frame encoding/decoding
 - OpenSSL for Certificate Management and TLS support
 
-### References
+## References
 - [RFC 7540](https://datatracker.ietf.org/doc/html/rfc7540)
 - [Web Concepts](https://webconcepts.info/concepts/)
 - [HTTP/2 and how it works.](https://cabulous.medium.com/http-2-and-how-it-works-9f645458e4b2)
