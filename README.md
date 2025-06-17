@@ -15,6 +15,7 @@ A light-weight Web Server built using HTTP 2.0 Protocol with TLS Suppport
   - Epoll-based event loop for event-based polling
   - Frame chunking for large file transfers
   - Memory-efficient buffer management
+  - Multi-Threading for Server-side Response
 
 - ### Content Handling
   - Static file serving with proper MIME type detection
