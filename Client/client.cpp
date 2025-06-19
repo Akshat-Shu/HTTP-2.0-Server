@@ -18,12 +18,12 @@ bool Client::isTimedOut(const int timeout) const {
     return difftime(time(nullptr), start) > timeout;
 }
 
-bool Client::sendData(const std::vector<uint8_t>& data) {
+bool Client::sendData(const std::vector<uint8_t>& data, int weight) {
     Logger::debug("Data: " + toHex(data.data(), data.size()) +
                   ", size: " + std::to_string(data.size()) +
                   ", for client ID: " + std::to_string(id));
 
-    auto bytesSent = threadPool->enqueue([this, data]() {
+    auto bytesSent = threadPool->enqueue(weight, [this, data]() {
         ssize_t bytesSent = SSL_write(ssl, data.data(), data.size());
         if (bytesSent < 0) {
             Logger::error("Error sending frame to client: " + std::to_string(errno));
@@ -40,10 +40,10 @@ bool Client::sendData(const std::vector<uint8_t>& data) {
     return bytesSent.get() >= 0;
 }
 
-bool Client::sendFrame(const http2::protocol::Frame& frame) {
+bool Client::sendFrame(const http2::protocol::Frame& frame, int weight) {
     std::vector<uint8_t> encodedFrame = frame.encode();
 
-    return sendData(encodedFrame);
+    return sendData(encodedFrame, weight);
 }
 
 bool Client::ackSettings(const http2::protocol::Frame& frame) {
@@ -145,7 +145,7 @@ void Client::doRequest(epoll_event& event) {
         if(frame.isPriority()) {
             Logger::debug("Priority frame received for stream ID: " + std::to_string(frame.stream_id()));
         }
-        if(handleFrame(frame)) {
+        if(FrameHandler::handleFrame(this, frame)) {
             Logger::info("Handled frame of type: " + std::to_string(frame.type()) + 
                          " for client ID: " + std::to_string(id));
         } else {
@@ -153,206 +153,4 @@ void Client::doRequest(epoll_event& event) {
                           " for client ID: " + std::to_string(id));
         }
     }
-}
-
-
-bool Client::handleDataFrame(const http2::protocol::Frame& frame) {
-    if(streams.find(frame.stream_id()) == streams.end()) {
-        Logger::error("Data frame received for unknown stream ID: " + std::to_string(frame.stream_id()));
-        return false;
-    }
-
-    Stream* stream = streams[frame.stream_id()];
-    if(stream->state != StreamState::OPEN) {
-        Logger::error("Data frame received for stream ID: " + std::to_string(frame.stream_id()) +
-                      " in open state");
-        return false;
-    }
-
-    stream->data.insert(stream->data.end(), frame.payload().begin(), frame.payload().end());
-    stream->endStream = frame.has_flag(http2::protocol::END_STREAM);
-    stream->endHeader = frame.has_flag(http2::protocol::END_HEADERS);
-    return true;
-}
-
-bool Client::handleHeadersFrame(const http2::protocol::Frame& frame) {
-    int streamId = frame.stream_id();
-    bool endHeaders = frame.has_flag(http2::protocol::END_HEADERS);
-    bool endStream = frame.has_flag(http2::protocol::END_STREAM);
-    bool ok = true;
-
-    if(streams.find(streamId) == streams.end()) {
-        streams[streamId] = new Stream(streamId);
-    }
-
-    streams[streamId]->state = StreamState::OPEN;
-    streams[streamId]->endHeader = endHeaders;
-    streams[streamId]->endStream = endStream;
-    streams[streamId]->headerFragments.insert(
-        streams[streamId]->headerFragments.end(),
-        frame.payload().begin(),
-        frame.payload().end()
-    );
-
-    Stream* strm = streams[streamId];
-
-    if(endHeaders) {
-        ok |= processEndHeader(strm);
-    }
-
-    if(endStream) {
-        strm->state = StreamState::CLOSED;
-    }
-
-    return ok;
-}
-
-bool Client::processEndHeader(Stream* strm) {
-    try {
-        http2::protocol::hpack::Decoder decoder;
-        decoder.decode_lowmem(strm->headerFragments.data(), 
-                       strm->headerFragments.data() + strm->headerFragments.size(),
-                       [&strm](http2::headers::Header header) {
-                           strm->headers.add(std::move(header));
-                       });
-        strm->state = StreamState::HALF_CLOSED_REMOTE;
-        strm->endHeader = true;
-        strm->headerFragments.clear();
-
-        for (const auto& header : strm->headers.all()) {
-            Logger::debug("Header received: " + header.name + ": " + header.value);
-        }
-
-        auto [found, method] = strm->headers.first(":method");
-        if(!found) {
-            Logger::error("No :method header found in headers for stream ID: " + std::to_string(strm->id));
-            return false;
-        }
-
-        Logger::debug("Method for stream ID " + std::to_string(strm->id) + ": " + method);
-        if(method == "GET") {
-            auto [foundPath, path] = strm->headers.first(":path");
-            if(!foundPath) {
-                Logger::error("No :path header found in headers for stream ID: " + std::to_string(strm->id));
-                return false;
-            }
-
-            respondGet(strm);
-        }
-        
-
-        return true;
-    } catch (const std::exception& e) {
-        Logger::error("Error processing end header: " + std::string(e.what()));
-        return false;
-    }
-}
-
-bool Client::handleGoAwayFrame(const http2::protocol::Frame &frame) {return true;}
-bool Client::handleWindowUpdateFrame(const http2::protocol::Frame &frame) {return true;}
-bool Client::handleContinuationFrame(const http2::protocol::Frame & frame) {return true;}
-bool Client::handlePriorityFrame(const http2::protocol::Frame &frame) {return true;}
-bool Client::handleResetFrame(const http2::protocol::Frame & frame) {return true;}
-bool Client::handlePushPromiseFrame(const http2::protocol::Frame &frame) {return true;}
-
-bool Client::handleSettingsFrame(const http2::protocol::Frame &frame) {
-    if (frame.stream_id() != 0) {
-        Logger::error("Settings frame received with non-zero stream ID: " + std::to_string(frame.stream_id()));
-        return false;
-    }
-
-    if (!frame.has_flag(http2::protocol::ACK)) {
-        Logger::info("Received settings frame, applying settings");
-        return ackSettings(frame);
-    } else {
-        Logger::info("Received settings ACK from client ID: " + std::to_string(id));
-    }
-
-    return true;
-}
-
-bool Client::handlePingFrame(const http2::protocol::Frame &frame) {
-    if (frame.stream_id() != 0) {
-        Logger::error("Ping frame received with non-zero stream ID: " + std::to_string(frame.stream_id()));
-        return false;
-    }
-
-    http2::protocol::Frame pingAck(
-        http2::protocol::PING_FRAME,
-        http2::protocol::ACK,
-        0
-    );
-
-    pingAck.mutable_payload() = frame.payload();
-
-    if (!sendFrame(pingAck)) {
-        Logger::error("Failed to send PING ACK for client ID: " + std::to_string(id));
-        return false;
-    }
-
-    return true;
-}
-
-bool Client::respondGet(Stream* strm) {
-    auto [foundPath, path] = strm->headers.first(":path");
-    if(!foundPath) {
-        Logger::error("No :path header found in headers for stream ID: " + std::to_string(strm->id));
-        return false;
-    }
-    ResponseData content = binder->getContent(path);
-    if(content.data.empty()) {
-        Logger::error("No content found for path: " + path);
-        return false;
-    }
-
-    // Logger::debug("Content for path " + path + ": " + htmlContent);
-
-    http2::protocol::Frame headerFrame(
-        http2::protocol::HEADERS_FRAME,
-        http2::protocol::END_HEADERS,
-        strm->id
-    );
-
-    http2::headers::Headers responseHeaders;
-    responseHeaders.add(":status", "200");
-    responseHeaders.add("cache-control", "private");
-    responseHeaders.add("content-type", content.mimeType);
-    responseHeaders.add("content-length", std::to_string(content.data.size()));
-    responseHeaders.add("location", path);
-    responseHeaders.add("server", "HTTP2Server/1.0");
-    std::vector<uint8_t> encodedHeaders;
-    http2::protocol::hpack::Encoder hpackEncoder;
-    hpackEncoder.encode_all(responseHeaders.all(), encodedHeaders);
-
-    headerFrame.mutable_payload().insert(
-        headerFrame.mutable_payload().end(),
-        encodedHeaders.begin(),
-        encodedHeaders.end()
-    );
-
-    http2::protocol::Frame dataFrame(
-        http2::protocol::DATA_FRAME,
-        http2::protocol::END_STREAM,
-        strm->id
-    );
-
-    dataFrame.mutable_payload().insert(
-        dataFrame.mutable_payload().end(),
-        content.data.begin(),
-        content.data.end()
-    );
-
-    Response resp;
-    resp.addFrame(headerFrame);
-    resp.addFrame(dataFrame);
-    resp.processFrames();
-    
-    for(const auto& frame : resp.encodeFrames()) {
-        if(!sendData(frame)) {
-            Logger::error("Failed to send response frame for stream ID: " + std::to_string(strm->id));
-            return false;
-        }
-    }
-
-    return true;
 }
