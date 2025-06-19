@@ -25,7 +25,7 @@ A light-weight Web Server built using HTTP 2.0 Protocol with TLS Suppport
 ![Screencast from 2025-06-16 22-26-24 webm](https://github.com/user-attachments/assets/04a0b186-d621-407f-8cb9-6ee3d857ab07)
 
 ## Libraries
-- [libhttp2](https://github.com/chronos-tachyon/libhttp2) for frame encoding/decoding
+- Modified version of [libhttp2](https://github.com/chronos-tachyon/libhttp2) for frame encoding/decoding
 - OpenSSL for Certificate Management and TLS support
 
 ## References
