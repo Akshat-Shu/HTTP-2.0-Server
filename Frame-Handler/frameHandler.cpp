@@ -83,7 +83,10 @@ bool FrameHandler::processEndHeader(Client* client, Stream* strm) {
                 return false;
             }
 
-            respondGet(client, strm);
+            if(!respondGet(client, strm)) {
+                showErrorPage(client, strm, 404);
+                return false;
+            }
         }
         
 
@@ -264,31 +267,92 @@ bool FrameHandler::handlePriorityFrame(Client* client, const http2::protocol::Fr
 }
 
 bool FrameHandler::handleFrame(Client* client, const http2::protocol::Frame &frame) {
-        Logger::debug("Handling frame of type: " + std::to_string(frame.type()) + 
-                      " for client ID: " + std::to_string(client->id));
-        switch (frame.type()) {
-            case http2::protocol::DATA_FRAME:
-                return handleDataFrame(client, frame);
-            case http2::protocol::HEADERS_FRAME:
-                return handleHeadersFrame(client, frame);
-            case http2::protocol::PRIORITY_FRAME:
-                return handlePriorityFrame(client, frame);
-            case http2::protocol::RST_STREAM_FRAME:
-                return handleResetFrame(client, frame);
-            case http2::protocol::SETTINGS_FRAME:
-                return handleSettingsFrame(client, frame);
-            case http2::protocol::PUSH_PROMISE_FRAME:
-                return handlePushPromiseFrame(client, frame);
-            case http2::protocol::PING_FRAME:
-                return handlePingFrame(client, frame);
-            case http2::protocol::GOAWAY_FRAME:
-                return handleGoAwayFrame(client, frame);
-            case http2::protocol::WINDOW_UPDATE_FRAME:
-                return handleWindowUpdateFrame(client, frame);
-            case http2::protocol::CONTINUATION_FRAME:
-                return handleContinuationFrame(client, frame);
-            default:
-                Logger::error("Unknown frame type: " + std::to_string(frame.type()));
-                return false;
+    Logger::debug("Handling frame of type: " + std::to_string(frame.type()) + 
+                    " for client ID: " + std::to_string(client->id));
+    switch (frame.type()) {
+        case http2::protocol::DATA_FRAME:
+            return handleDataFrame(client, frame);
+        case http2::protocol::HEADERS_FRAME:
+            return handleHeadersFrame(client, frame);
+        case http2::protocol::PRIORITY_FRAME:
+            return handlePriorityFrame(client, frame);
+        case http2::protocol::RST_STREAM_FRAME:
+            return handleResetFrame(client, frame);
+        case http2::protocol::SETTINGS_FRAME:
+            return handleSettingsFrame(client, frame);
+        case http2::protocol::PUSH_PROMISE_FRAME:
+            return handlePushPromiseFrame(client, frame);
+        case http2::protocol::PING_FRAME:
+            return handlePingFrame(client, frame);
+        case http2::protocol::GOAWAY_FRAME:
+            return handleGoAwayFrame(client, frame);
+        case http2::protocol::WINDOW_UPDATE_FRAME:
+            return handleWindowUpdateFrame(client, frame);
+        case http2::protocol::CONTINUATION_FRAME:
+            return handleContinuationFrame(client, frame);
+        default:
+            Logger::error("Unknown frame type: " + std::to_string(frame.type()));
+            return false;
+    }
+}
+
+bool FrameHandler::showErrorPage(Client* client, Stream* stream, int errorCode) {
+    Logger::error("Showing error page for client ID: " + std::to_string(client->id) + 
+                  ", stream ID: " + std::to_string(stream->id) + 
+                  ", error code: " + std::to_string(errorCode));
+    
+    ResponseData content = client->binder->getErrorPage(errorCode);
+    if(content.data.empty()) {
+        Logger::error("No error page found for error code: " + std::to_string(errorCode));
+        return false;
+    }
+
+    http2::protocol::Frame headerFrame(
+        http2::protocol::HEADERS_FRAME,
+        http2::protocol::END_HEADERS,
+        stream->id
+    );
+
+    http2::headers::Headers responseHeaders;
+    responseHeaders.add(":status", std::to_string(errorCode));
+    responseHeaders.add("cache-control", "private");
+    responseHeaders.add("content-type", content.mimeType);
+    responseHeaders.add("content-length", std::to_string(content.data.size()));
+    responseHeaders.add("server", "HTTP2Server/1.0");
+    
+    std::vector<uint8_t> encodedHeaders;
+    http2::protocol::hpack::Encoder hpackEncoder;
+    hpackEncoder.encode_all(responseHeaders.all(), encodedHeaders);
+
+    headerFrame.mutable_payload().insert(
+        headerFrame.mutable_payload().end(),
+        encodedHeaders.begin(),
+        encodedHeaders.end()
+    );
+
+    http2::protocol::Frame dataFrame(
+        http2::protocol::DATA_FRAME,
+        http2::protocol::END_STREAM,
+        stream->id
+    );
+
+    dataFrame.mutable_payload().insert(
+        dataFrame.mutable_payload().end(),
+        content.data.begin(),
+        content.data.end()
+    );
+
+    Response resp;
+    resp.addFrame(headerFrame);
+    resp.addFrame(dataFrame);
+    resp.processFrames();
+    
+    for(const auto& frame : resp.encodeFrames()) {
+        if(!client->sendData(frame, stream->weight)) {
+            Logger::error("Failed to send error response frame for stream ID: " + std::to_string(stream->id));
+            return false;
         }
     }
+
+    return true;
+}

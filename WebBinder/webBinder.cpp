@@ -105,3 +105,13 @@ ResponseData WebBinder::getContent(const std::string& url) {
         return empty;
     }
 }
+
+ResponseData WebBinder::getErrorPage(int errorCode) {
+    std::string content = "<!DOCTYPE html><html><head><title>Error " + std::to_string(errorCode) + "</title></head><body>";
+    content += "<h1>Error " + std::to_string(errorCode) + "</h1>";
+    content += "<p>Error Message: " + http2::status::getMessage(errorCode) + "</p>";
+    return ResponseData(
+        "text/html",
+        std::vector<u_int8_t>(content.begin(), content.end())
+    );
+}

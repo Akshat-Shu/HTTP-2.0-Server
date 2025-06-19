@@ -8,7 +8,7 @@ else
     CXXFLAGS += -O2 -DNDEBUG
 endif
 
-SRC_DIRS = Client http2/headers http2/protocol http2/protocol/hpack \
+SRC_DIRS = Client http2 \
            Multithreading Networking/Epoller Networking/Socket \
            Utils WebBinder Response Frame-Handler
 

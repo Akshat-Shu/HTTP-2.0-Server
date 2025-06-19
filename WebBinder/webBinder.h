@@ -4,6 +4,7 @@
 #include <fstream>
 #include "Utils/Logger/logger.h"
 #include "Response/responseData.h"
+#include "http2/headers/statusCode.h"
 
 #pragma once
 
@@ -26,5 +27,5 @@ public:
 
     ResponseData getDirectoryContent(const std::string& dir, std::string boundUrl); 
 
-
+    ResponseData getErrorPage(int errorCode = 404);
 };

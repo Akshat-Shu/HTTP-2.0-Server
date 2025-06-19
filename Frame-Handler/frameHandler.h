@@ -22,4 +22,5 @@ public:
 
     static bool respondGet(Client* client, Stream* stream);
     static bool processEndHeader(Client* client, Stream* stream);
+    static bool showErrorPage(Client* client, Stream* stream, int errorCode = 404);
 };
