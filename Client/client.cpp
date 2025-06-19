@@ -18,7 +18,7 @@ bool Client::isTimedOut(const int timeout) const {
     return difftime(time(nullptr), start) > timeout;
 }
 
-bool Client::sendData(const std::vector<uint8_t>& data, int weight = 0) {
+bool Client::sendData(const std::vector<uint8_t>& data, int weight) {
     Logger::debug("Data: " + toHex(data.data(), data.size()) +
                   ", size: " + std::to_string(data.size()) +
                   ", for client ID: " + std::to_string(id));
@@ -40,7 +40,7 @@ bool Client::sendData(const std::vector<uint8_t>& data, int weight = 0) {
     return bytesSent.get() >= 0;
 }
 
-bool Client::sendFrame(const http2::protocol::Frame& frame, int weight = 0) {
+bool Client::sendFrame(const http2::protocol::Frame& frame, int weight) {
     std::vector<uint8_t> encodedFrame = frame.encode();
 
     return sendData(encodedFrame, weight);
