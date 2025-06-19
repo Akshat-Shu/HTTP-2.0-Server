@@ -15,6 +15,7 @@
 #include "Utils/toHex.cpp"
 #include "WebBinder/webBinder.h"
 #include "Response/response.h"
+#include "Frame-Handler/frameHandler.h"
 
 #pragma once
 
@@ -69,9 +70,9 @@ public:
 
     void doRequest(epoll_event& event);
 
-    bool sendFrame(const http2::protocol::Frame& frame);
+    bool sendFrame(const http2::protocol::Frame& frame, int weight = 0);
 
-    bool sendData(const std::vector<uint8_t>& data);
+    bool sendData(const std::vector<uint8_t>& data, int weight = 0);
 
     bool acceptPreface();
 
@@ -79,46 +80,4 @@ public:
 
     bool applySettings();
 
-    bool handleDataFrame(const http2::protocol::Frame& frame);
-    bool handleHeadersFrame(const http2::protocol::Frame& frame);
-    bool handlePriorityFrame(const http2::protocol::Frame& frame);
-    bool handleResetFrame(const http2::protocol::Frame& frame);
-    bool handleSettingsFrame(const http2::protocol::Frame& frame);
-    bool handlePushPromiseFrame(const http2::protocol::Frame& frame);
-    bool handlePingFrame(const http2::protocol::Frame& frame);
-    bool handleGoAwayFrame(const http2::protocol::Frame& frame);
-    bool handleWindowUpdateFrame(const http2::protocol::Frame& frame);
-    bool handleContinuationFrame(const http2::protocol::Frame& frame);
-    bool handleFrame(const http2::protocol::Frame& frame) {
-        Logger::debug("Handling frame of type: " + std::to_string(frame.type()) + 
-                      " for client ID: " + std::to_string(id));
-        switch (frame.type()) {
-            case http2::protocol::DATA_FRAME:
-                return handleDataFrame(frame);
-            case http2::protocol::HEADERS_FRAME:
-                return handleHeadersFrame(frame);
-            case http2::protocol::PRIORITY_FRAME:
-                return handlePriorityFrame(frame);
-            case http2::protocol::RST_STREAM_FRAME:
-                return handleResetFrame(frame);
-            case http2::protocol::SETTINGS_FRAME:
-                return handleSettingsFrame(frame);
-            case http2::protocol::PUSH_PROMISE_FRAME:
-                return handlePushPromiseFrame(frame);
-            case http2::protocol::PING_FRAME:
-                return handlePingFrame(frame);
-            case http2::protocol::GOAWAY_FRAME:
-                return handleGoAwayFrame(frame);
-            case http2::protocol::WINDOW_UPDATE_FRAME:
-                return handleWindowUpdateFrame(frame);
-            case http2::protocol::CONTINUATION_FRAME:
-                return handleContinuationFrame(frame);
-            default:
-                Logger::error("Unknown frame type: " + std::to_string(frame.type()));
-                return false;
-        }
-    }
-
-    bool processEndHeader(Stream* stream);
-    bool respondGet(Stream* stream);
 };

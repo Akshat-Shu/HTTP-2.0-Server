@@ -11,7 +11,7 @@ ThreadPool::ThreadPool(size_t n) : stop(false) {
                     condition.wait(lock,
                         [this]{ return stop || !tasks.empty(); });
                     if (stop && tasks.empty()) return;
-                    task = std::move(tasks.front());
+                    task = std::move(tasks.top().task);
                     tasks.pop();
                 }
                 task();
