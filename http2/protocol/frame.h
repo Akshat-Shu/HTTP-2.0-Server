@@ -74,6 +74,11 @@ class Frame final {
   bool isExclusive() const { return exclusive_; }
   uint8_t weight() const { return weight_; }
 
+  size_t size() const {
+    return 9 + payload_.size() + (hasPriority_ ? 5 : 0) +
+           (has_flag(PADDED) ? 1 : 0);
+  }
+
  private:
   uint8_t type_;
   uint8_t flags_;
@@ -82,7 +87,7 @@ class Frame final {
   bool hasPriority_ = false;
   uint32_t streamDependency_ = -1;
   bool exclusive_ = false;
-  uint8_t weight_ = 0;
+  int weight_ = 0; // avoid integer overflow
 };
 
 inline std::ostream& operator<<(std::ostream& s, const Frame& t) {

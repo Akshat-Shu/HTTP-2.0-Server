@@ -33,7 +33,7 @@ void Response::processFrames() {
 
 std::vector<http2::protocol::Frame> Response::splitFrame(const http2::protocol::Frame& frame) {
     std::vector<http2::protocol::Frame> splitFrames;
-    if (frame.payload().size() <= MAX_FRAME_SIZE) {
+    if (frame.size() <= MAX_FRAME_SIZE) {
         splitFrames.push_back(frame);
         return splitFrames;
     }

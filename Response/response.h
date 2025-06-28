@@ -4,7 +4,7 @@
 #include "vector"
 
 #define MAX_BUFFER_SIZE 32768
-#define MAX_FRAME_SIZE 16384
+#define MAX_FRAME_SIZE 16384-15 // 15 bytes as a quick hack for the preceding 15 bytes
 
 class Response {
 private:

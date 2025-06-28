@@ -71,11 +71,12 @@ bool Frame::decode(const uint8_t* p, const uint8_t* q) {
 
   if((flags_ & PRIORITY) && (type_ == HEADERS_FRAME || type_ == PUSH_PROMISE_FRAME)) {
     if(payload_size < 5 + headerStart) return false;
-     
+    
     hasPriority_ = true;
     exclusive_ = (p[0] & 0x80) != 0;
     streamDependency_ = ((p[0] & 0x7F) << 24) | (p[1] << 16) | (p[2] << 8) | p[3];
-    weight_ = p[4] + 1;
+    weight_ = p[4] + 1; // have to make it an int, otherwise, int overflow
+
     if (weight_ < 1 || weight_ > 256) return false;
 
     headerStart += 5;
@@ -95,7 +96,7 @@ std::vector<Frame> Frame::toFrames(const uint8_t* begin, const uint8_t* end) {
   while (curr < end) {
     uint32_t size = (curr[0] << 16) | (curr[1] << 8) | curr[2];
     Frame frame;
-    if (!frame.decode(curr, end)) break;
+    if (!frame.decode(curr, end)) Logger::warning("Failed to decode frame at position: " + std::to_string(curr - begin));
     frames.push_back(std::move(frame));
     curr += 9 + size;
   }

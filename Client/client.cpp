@@ -12,6 +12,9 @@ Client::Client(int id, int fd, const sockaddr_in6& addr, socklen_t addrLen, SSL*
     errorCode(0), clientFD(fd, EpollFdType::CLIENT), lastProcessedStream(-1),
     recvBuffer(BUFFER_SIZE), ssl(ssl), binder(binder) {
     ip = getIp(addr);
+    state = State::HANDSHAKE;
+
+    hpackDecoder = std::make_unique<http2::protocol::hpack::Decoder>();
 }
 
 bool Client::isTimedOut(const int timeout) const {
@@ -23,6 +26,7 @@ bool Client::sendData(const std::vector<uint8_t>& data, int weight) {
                   ", size: " + std::to_string(data.size()) +
                   ", for client ID: " + std::to_string(id));
 
+    state = WRITING;
     auto bytesSent = threadPool->enqueue(weight, [this, data]() {
         ssize_t bytesSent = SSL_write(ssl, data.data(), data.size());
         if (bytesSent < 0) {
@@ -36,7 +40,7 @@ bool Client::sendData(const std::vector<uint8_t>& data, int weight) {
         }
         return (int) bytesSent;
     });
-
+    state = CLIENT_IDLE;
     return bytesSent.get() >= 0;
 }
 
@@ -103,8 +107,9 @@ bool Client::applySettings() {
 void Client::doRequest(epoll_event& event) {
     recvBuffer.resize(BUFFER_SIZE);
     // ssize_t bytesRead = recv(clientFD.fd, recvBuffer.data(), recvBuffer.size(), MSG_DONTWAIT | MSG_NOSIGNAL);
+    state = READING;
     ssize_t bytesRead = SSL_read(ssl, recvBuffer.data(), recvBuffer.size());
-
+    state = CLIENT_IDLE;
     // Logger::debug("Client ID: " + std::to_string(id) + " received data, bytes read: " + std::to_string(bytesRead));
 
     if (bytesRead < 0) {
@@ -124,7 +129,7 @@ void Client::doRequest(epoll_event& event) {
     }
 
     Logger::debug("Client ID: " + std::to_string(id) + " received data, bytes read: " + std::to_string(bytesRead));
-    Logger::debug("Data: " + toHex(recvBuffer.data(), bytesRead));
+    Logger::debug("Data: " + toHex(recvBuffer.data(), bytesRead, 512));
 
     std::string prefaceStr = "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n";
     if (recvBuffer.size() >= prefaceStr.size() && 
@@ -151,6 +156,41 @@ void Client::doRequest(epoll_event& event) {
         } else {
             Logger::error("Error handling frame of type: " + std::to_string(frame.type()) + 
                           " for client ID: " + std::to_string(id));
+        }
+    }
+}
+
+int Client::continueHandshake() {
+    if(state != State::HANDSHAKE) return 1;
+
+    int ret = SSL_accept(ssl);
+
+    if(ret > 0) {
+        const unsigned char* alpn = NULL;
+        unsigned int alpnLen = 0;
+        SSL_get0_alpn_selected(ssl, &alpn, &alpnLen);
+        
+        if (alpnLen == 2 && alpn[0] == 'h' && alpn[1] == '2') {
+            Logger::info("HTTP/2 negotiated via ALPN for client ID: " + std::to_string(id));
+            return 1;
+        } else {
+            Logger::error("HTTP/2 not negotiated via ALPN for client ID: " + std::to_string(id));
+            SSL_free(ssl);
+            state = State::CLIENT_CLOSED;
+            return -1;
+        }
+    } else {
+        int err = SSL_get_error(ssl, ret);
+        if (err == SSL_ERROR_WANT_READ || err == SSL_ERROR_WANT_WRITE) {
+            // Logger::debug("SSL_accept wants more data for client ID: " + std::to_string(id));
+            return 0;
+        } else {
+            ERR_print_errors_fp(stdout);
+            Logger::error("SSL_accept failed for client ID: " + std::to_string(id) + 
+                          ", error code: " + std::to_string(err));
+            SSL_free(ssl);
+            state = State::CLIENT_CLOSED;
+            return -1;
         }
     }
 }

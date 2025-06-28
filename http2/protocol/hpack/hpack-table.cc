@@ -109,6 +109,18 @@ std::size_t Table::best_match(const Header& h) const {
   return 0;
 }
 
+std::size_t Table::best_match(const std::string& name) const {
+  const auto& s = static_table();
+  for (std::size_t i = 1; i < s.size(); ++i) {
+    if (name == s[i].name) return i;
+  }
+  for (std::size_t i = 0; i < dynamic_.size(); ++i) {
+    if (name == dynamic_[i].name) return s.size() + i;
+  }
+  return 0;
+}
+
 }  // namespace hpack
+
 }  // namespace protocol
 }  // namespace http2

@@ -49,8 +49,10 @@ public:
                                });
 
         if (it != clients.end()) {
-            delete it->second;
+            Logger::info("Removing client with ID: " + std::to_string(it->second->id));
+            it->second->clientFD.setState(FD_CLOSED);
             clients.erase(it);
+            delete it->second;
         }
     }
 

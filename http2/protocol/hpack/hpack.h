@@ -71,6 +71,7 @@ class Table final {
   // best_match returns the index of the best-matching existing header, or 0 if
   // nothing matches.
   std::size_t best_match(const Header& h) const;
+  std::size_t best_match(const std::string& name) const;
 
  private:
   void evict();

@@ -67,7 +67,8 @@ Socket::Socket(int port) : port(port), id(ctr++), sockFD(-1) {
         return;
     }
 
-    int flags = fcntl(sockFD, F_GETFL, 0);
+    int flags = fcntl(sockFD, F_GETFL, O_NONBLOCK | O_CLOEXEC);
+    
     if (flags == -1) {
         Logger::error("Failed to get socket flags");
         close(sockFD);

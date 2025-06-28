@@ -48,6 +48,8 @@ bool FrameHandler::handleHeadersFrame(Client* client, const http2::protocol::Fra
 
     if(endStream) {
         strm->state = StreamState::CLOSED;
+        client->streams.erase(streamId);
+        Logger::debug("Stream ID " + std::to_string(streamId) + " closed");
     }
 
     return ok;
@@ -55,12 +57,13 @@ bool FrameHandler::handleHeadersFrame(Client* client, const http2::protocol::Fra
 
 bool FrameHandler::processEndHeader(Client* client, Stream* strm) {
     try {
-        http2::protocol::hpack::Decoder decoder;
-        decoder.decode_lowmem(strm->headerFragments.data(), 
-                       strm->headerFragments.data() + strm->headerFragments.size(),
-                       [&strm](http2::headers::Header header) {
-                           strm->headers.add(std::move(header));
-                       });
+        client->hpackDecoder->decode_lowmem(
+            strm->headerFragments.data(),
+            strm->headerFragments.data() + strm->headerFragments.size(),
+            [&strm](http2::headers::Header header) {
+                strm->headers.add(std::move(header));
+            }
+        );
         strm->state = StreamState::HALF_CLOSED_REMOTE;
         strm->endHeader = true;
         strm->headerFragments.clear();
@@ -69,16 +72,16 @@ bool FrameHandler::processEndHeader(Client* client, Stream* strm) {
             Logger::debug("Header received: " + header.name + ": " + header.value);
         }
 
-        auto [found, method] = strm->headers.first(":method");
-        if(!found) {
+        int i = client->hpackDecoder->table().best_match(":method");
+        if(!i) {
             Logger::error("No :method header found in headers for stream ID: " + std::to_string(strm->id));
             return false;
         }
-
+        string method = client->hpackDecoder->table().at(i).value;
         Logger::debug("Method for stream ID " + std::to_string(strm->id) + ": " + method);
         if(method == "GET") {
-            auto [foundPath, path] = strm->headers.first(":path");
-            if(!foundPath) {
+            auto [found, p] = strm->headers.first(":path");
+            if(!found) {
                 Logger::error("No :path header found in headers for stream ID: " + std::to_string(strm->id));
                 return false;
             }
@@ -98,7 +101,6 @@ bool FrameHandler::processEndHeader(Client* client, Stream* strm) {
 }
 
 bool FrameHandler::handleWindowUpdateFrame(Client* client, const http2::protocol::Frame &frame) {return true;}
-bool FrameHandler::handleResetFrame(Client* client, const http2::protocol::Frame & frame) {return true;}
 bool FrameHandler::handlePushPromiseFrame(Client* client, const http2::protocol::Frame &frame) {return true;}
 
 bool FrameHandler::handleSettingsFrame(Client* client, const http2::protocol::Frame &frame) {
@@ -140,11 +142,12 @@ bool FrameHandler::handlePingFrame(Client* client, const http2::protocol::Frame 
 }
 
 bool FrameHandler::respondGet(Client* client, Stream* strm) {
-    auto [foundPath, path] = strm->headers.first(":path");
-    if(!foundPath) {
+    auto [found, path] = strm->headers.first(":path");
+    if(!found) {
         Logger::error("No :path header found in headers for stream ID: " + std::to_string(strm->id));
         return false;
     }
+    
     ResponseData content = client->binder->getContent(path);
     if(content.data.empty()) {
         Logger::error("No content found for path: " + path);
@@ -266,35 +269,6 @@ bool FrameHandler::handlePriorityFrame(Client* client, const http2::protocol::Fr
     return true;
 }
 
-bool FrameHandler::handleFrame(Client* client, const http2::protocol::Frame &frame) {
-    Logger::debug("Handling frame of type: " + std::to_string(frame.type()) + 
-                    " for client ID: " + std::to_string(client->id));
-    switch (frame.type()) {
-        case http2::protocol::DATA_FRAME:
-            return handleDataFrame(client, frame);
-        case http2::protocol::HEADERS_FRAME:
-            return handleHeadersFrame(client, frame);
-        case http2::protocol::PRIORITY_FRAME:
-            return handlePriorityFrame(client, frame);
-        case http2::protocol::RST_STREAM_FRAME:
-            return handleResetFrame(client, frame);
-        case http2::protocol::SETTINGS_FRAME:
-            return handleSettingsFrame(client, frame);
-        case http2::protocol::PUSH_PROMISE_FRAME:
-            return handlePushPromiseFrame(client, frame);
-        case http2::protocol::PING_FRAME:
-            return handlePingFrame(client, frame);
-        case http2::protocol::GOAWAY_FRAME:
-            return handleGoAwayFrame(client, frame);
-        case http2::protocol::WINDOW_UPDATE_FRAME:
-            return handleWindowUpdateFrame(client, frame);
-        case http2::protocol::CONTINUATION_FRAME:
-            return handleContinuationFrame(client, frame);
-        default:
-            Logger::error("Unknown frame type: " + std::to_string(frame.type()));
-            return false;
-    }
-}
 
 bool FrameHandler::showErrorPage(Client* client, Stream* stream, int errorCode) {
     Logger::error("Showing error page for client ID: " + std::to_string(client->id) + 
@@ -355,4 +329,54 @@ bool FrameHandler::showErrorPage(Client* client, Stream* stream, int errorCode) 
     }
 
     return true;
+}
+
+bool FrameHandler::handleResetFrame(Client* client, const http2::protocol::Frame & frame) {
+    int streamId = frame.stream_id();
+    if(client->streams.find(streamId) == client->streams.end()) {
+        Logger::warning("Reset frame received for unknown stream ID: " + std::to_string(streamId));
+        return false;
+    }
+
+    Stream* stream = client->streams[streamId];
+    if(stream->state == StreamState::CLOSED) {
+        Logger::warning("Reset frame received for already closed stream ID: " + std::to_string(streamId));
+        return false;
+    }
+
+    stream->state = StreamState::CLOSED;
+    client->streams.erase(streamId);
+    Logger::info("Stream ID: " + std::to_string(streamId) + " has been reset and closed.");
+    return true;
+}
+
+
+bool FrameHandler::handleFrame(Client* client, const http2::protocol::Frame &frame) {
+    Logger::debug("Handling frame of type: " + std::to_string(frame.type()) + 
+                    " for client ID: " + std::to_string(client->id));
+    switch (frame.type()) {
+        case http2::protocol::DATA_FRAME:
+            return handleDataFrame(client, frame);
+        case http2::protocol::HEADERS_FRAME:
+            return handleHeadersFrame(client, frame);
+        case http2::protocol::PRIORITY_FRAME:
+            return handlePriorityFrame(client, frame);
+        case http2::protocol::RST_STREAM_FRAME:
+            return handleResetFrame(client, frame);
+        case http2::protocol::SETTINGS_FRAME:
+            return handleSettingsFrame(client, frame);
+        case http2::protocol::PUSH_PROMISE_FRAME:
+            return handlePushPromiseFrame(client, frame);
+        case http2::protocol::PING_FRAME:
+            return handlePingFrame(client, frame);
+        case http2::protocol::GOAWAY_FRAME:
+            return handleGoAwayFrame(client, frame);
+        case http2::protocol::WINDOW_UPDATE_FRAME:
+            return handleWindowUpdateFrame(client, frame);
+        case http2::protocol::CONTINUATION_FRAME:
+            return handleContinuationFrame(client, frame);
+        default:
+            Logger::error("Unknown frame type: " + std::to_string(frame.type()));
+            return false;
+    }
 }

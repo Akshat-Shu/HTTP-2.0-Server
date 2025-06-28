@@ -12,6 +12,7 @@
 #include "Multithreading/threadPool.h"
 #include "stream.h"
 #include <openssl/ssl.h>
+#include <openssl/err.h>
 #include "Utils/toHex.cpp"
 #include "WebBinder/webBinder.h"
 #include "Response/response.h"
@@ -21,6 +22,14 @@
 
 #define TIMEOUT 600
 #define BUFFER_SIZE 4096
+
+enum State {
+    CLIENT_IDLE,
+    READING,
+    WRITING,
+    CLIENT_CLOSED,
+    HANDSHAKE
+};
 
 class Client {
 public:
@@ -38,6 +47,9 @@ public:
     SSL* ssl;
     WebBinder* binder;
     http2::protocol::Settings settings;
+    State state;
+
+    std::unique_ptr<http2::protocol::hpack::Decoder> hpackDecoder;
 
     // static std::map<int, Client*> clients;
     // static int ctr;
@@ -79,5 +91,7 @@ public:
     bool ackSettings(const http2::protocol::Frame& frame);
 
     bool applySettings();
+
+    int continueHandshake();
 
 };
